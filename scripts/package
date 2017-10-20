@@ -1,24 +1,19 @@
 #!/bin/bash
 set -e
 
+ARCH=${ARCH:-"amd64"}
+
 source $(dirname $0)/version
 
-ARCH=${ARCH:-"amd64"}
-SUFFIX=""
-[ "${ARCH}" != "amd64" ] && SUFFIX="_${ARCH}"
+cd $(dirname $0)/..
 
-cd $(dirname $0)/../package
-
-TAG=${TAG:-${VERSION}${SUFFIX}}
-REPO=${REPO:-rancher}
-
-if echo $TAG | grep -q dirty; then
-    TAG=dev
+if [ ! -e bin/rancher-flat-ipam ]; then
+    ./scripts/build
 fi
 
-cp ../bin/rancher-flat-ipam .
+mkdir -p dist/artifacts
+cd bin/
 
-IMAGE=${REPO}/rancher-flat-ipam:${TAG}
-docker build -t ${IMAGE} .
-echo ${IMAGE} > ../dist/images
-echo Built ${IMAGE}
+tar cvzf ../dist/artifacts/rancher-flat-ipam-${ARCH}-${VERSION}.tar.gz .
+
+echo "Built rancher-flat-ipam-${ARCH}-${VERSION}.tar.gz"

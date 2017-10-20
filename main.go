@@ -13,15 +13,12 @@ import (
 	"github.com/rancher/rancher-cni-ipam/ipfinder/metadata"
 )
 
-const (
-	defaultPrefixSize = "/16"
-)
-
 func cmdAdd(args *skel.CmdArgs) error {
-	ipamConf, err := LoadIPAMConfig(args.StdinData, args.Args)
+	cniConf, err := LoadCNIConfig(args.StdinData, args.Args)
 	if err != nil {
 		return err
 	}
+	ipamConf := cniConf.IPAM
 
 	if ipamConf.IsDebugLevel == "true" {
 		logrus.SetLevel(logrus.DebugLevel)
@@ -35,11 +32,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}
 
-	logrus.Debugf("rancher-cni-ipam: cmdAdd: invoked")
-	logrus.Debugf("rancher-cni-ipam: %s", fmt.Sprintf("args: %#v", args))
-	logrus.Debugf("rancher-cni-ipam: %s", fmt.Sprintf("ipamConf: %#v", ipamConf))
-	logrus.Debugf("rancher-cni-ipam: rancher UUID: %s", ipamConf.RancherContainerUUID)
-	logrus.Debugf("rancher-cni-ipam: IPAddress from args: %s", ipamConf.IPAddress)
+	logrus.Debugf("rancher-flat-ipam: cmdAdd: invoked")
+	logrus.Debugf("rancher-flat-ipam: %s", fmt.Sprintf("args: %#v", args))
+	logrus.Debugf("rancher-flat-ipam: %s", fmt.Sprintf("ipamConf: %#v", ipamConf))
+	logrus.Debugf("rancher-flat-ipam: rancher UUID: %s", ipamConf.RancherContainerUUID)
+	logrus.Debugf("rancher-flat-ipam: IPAddress from args: %s", ipamConf.IPAddress)
 
 	metadataAddress := os.Getenv("RANCHER_METADATA_ADDRESS")
 	ipf, err := metadata.NewIPFinderFromMetadata(metadataAddress)
@@ -54,15 +51,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return errors.New("No IP address found")
 		}
 
-		prefixSize := ""
-		if ipamConf.SubnetPrefixSize != "" {
-			prefixSize = ipamConf.SubnetPrefixSize
-		} else {
-			prefixSize = defaultPrefixSize
-		}
-		ipStringWithPrefix = ipString + prefixSize
+		ipStringWithPrefix = ipString + cniConf.getSubnetSize()
 	}
-	logrus.Debugf("rancher-cni-ipam: ip: %s", ipStringWithPrefix)
+	logrus.Debugf("rancher-flat-ipam: ip: %s", ipStringWithPrefix)
 
 	ip, ipnet, err := net.ParseCIDR(ipStringWithPrefix)
 	if err != nil {
@@ -75,11 +66,18 @@ func cmdAdd(args *skel.CmdArgs) error {
 		},
 	}
 
+	metadataRoute, err := cniConf.getMetadataRoute()
+	if err != nil {
+		logrus.Errorf("rancher-flat-ipam: error getting metadata route :%v", err)
+		return err
+	}
+
 	r.IP4.Routes = append(
 		ipamConf.Routes,
+		metadataRoute,
 	)
 
-	logrus.Infof("rancher-cni-ipam: %s", fmt.Sprintf("r: %#v", r))
+	logrus.Infof("rancher-flat-ipam: %s", fmt.Sprintf("r: %#v", r))
 	return r.Print()
 }
 
